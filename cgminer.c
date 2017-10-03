@@ -34,10 +34,6 @@
 #include <semaphore.h>
 #endif
 
-#ifdef USE_LIBSYSTEMD
-#include <systemd/sd-daemon.h>
-#endif
-
 #include <sys/stat.h>
 #include <sys/types.h>
 

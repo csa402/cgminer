@@ -50,9 +50,7 @@ AC_PROG_CC
 gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
-
-# This breaks autoreconf so disable it
-# LT_INIT([disable-shared])
+LT_INIT([disable-shared])
 
 gl_INIT
 
@@ -387,7 +385,7 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
-	AC_SEARCH_LIBS(addstr, pdcurses ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
@@ -415,9 +413,9 @@ else
 fi
 
 if test x$gridseed$zeus$lketc != xnonono; then
-	//want_libudev=true
+	want_libudev=true
 else
-	//want_libudev=false
+	want_libudev=false
 fi
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon2$modminer$gridseed$zeus$lketc != xnonononono])
@@ -431,7 +429,7 @@ if test "x$want_usbutils" != xfalse; then
 	dlibusb="no"
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 	AC_ARG_WITH([system-libusb],
-		[AC_HELP_STRING([--with-system-libusb],[NOT RECOMMENDED! Compile against dynamic system libusb. (Default use included static libusb)])],
+		[AC_HELP_STRING([--with-system-libusb],[Compile against dynamic system libusb (default use included static libusb)])],
 		[dlibusb=$withval]
 	)
 
@@ -450,14 +448,7 @@ if test "x$want_usbutils" != xfalse; then
 		AC_CONFIG_SUBDIRS([compat/libusb-1.0])
 		LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
 		if test "x$have_linux" = "xtrue"; then
-			AC_ARG_ENABLE([udev],
-				[AC_HELP_STRING([--disable-udev],[Disable building libusb with udev])],
-				[udev=$enableval]
-				)
-
-			if test "x$udev" != xno; then
 			LIBUSB_LIBS+=" -ludev"
-		fi
 		fi
 		if test "x$have_darwin" = "xtrue"; then
 			LIBUSB_LIBS+=" -lobjc"
@@ -468,31 +459,19 @@ else
 	LIBUSB_LIBS=""
 fi
 
-AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
-
-djansson="no"
-AC_ARG_WITH([system-jansson],
-	[AC_HELP_STRING([--with-system-jansson],[NOT RECOMMENDED! Compile against dynamic system jansson. (Default use included static jansson)])],
-	[djansson=$withval]
-)
-
-if test "x$djansson" != xno; then
-	case $target in
-		*-*-freebsd*)
-			JANSSON_LIBS="-ljansson"
-			JANSSON_CFLAGS=""
-			AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])
-			;;
-		*)
-			PKG_CHECK_MODULES(JANSSON, jansson >= 2.6, [AC_DEFINE(HAVE_JANSSON, 1, [Define if you have jansson >= 2.6])], [AC_MSG_ERROR([Could not find jansson library - please install jansson >= 2.6])])
-			;;
-	esac
+if test "x$want_libudev" != xfalse; then
+	if test "x$have_linux" = "xtrue"; then
+		AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if udev support available])
+		LIBUDEV_LIBS="-ludev"
+	fi
 else
-	AC_CONFIG_SUBDIRS([compat/jansson-2.5])
-	JANSSON_LIBS="compat/jansson-2.5/src/.libs/libjansson.a"
+	LIBUDEV_LIBS=""
 fi
 
-AM_CONDITIONAL([WANT_STATIC_JANSSON], [test x$djansson = xno])
+AM_CONDITIONAL([WANT_STATIC_LIBUSB], [test x$dlibusb = xno])
+
+AC_CONFIG_SUBDIRS([compat/jansson-2.5])
+JANSSON_LIBS="compat/jansson-2.5/src/.libs/libjansson.a"
 
 PKG_PROG_PKG_CONFIG()
 
@@ -509,12 +488,13 @@ fi
 AC_SUBST(LIBUSB_LIBS)
 AC_SUBST(LIBUSB_CFLAGS)
 
+AC_SUBST(LIBUDEV_LIBS)
+
 AC_ARG_ENABLE([libcurl],
-	[AC_HELP_STRING([--disable-libcurl],[Disable building with libcurl for GBT support])],
+	[AC_HELP_STRING([--disable-libcurl],[Disable building with libcurl for getwork and GBT support])],
 	[libcurl=$enableval]
 	)
 
-static_curl="no"
 if test "x$libcurl" != xno; then
 	if test "x$have_win32" != xtrue; then
 		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], [AC_DEFINE([CURL_HAS_KEEPALIVE], [1], [Defined if version of curl supports keepalive.])],
@@ -522,32 +502,13 @@ if test "x$libcurl" != xno; then
 	else
 		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.25.0])])
 		AC_DEFINE([CURL_HAS_KEEPALIVE], [1])
-		static_curl="yes"
 	fi
 	AC_DEFINE([HAVE_LIBCURL], [1], [Defined to 1 if libcurl support built in])
 else
 	LIBCURL_LIBS=""
 fi
 AC_SUBST(LIBCURL_LIBS)
-AM_CONDITIONAL([STATIC_CURL], [test x$static_curl = xyes])
 
-libsystemd="no"
-
-AC_ARG_ENABLE([libsystemd],
-	[AC_HELP_STRING([--enable-libsystemd],[Enable building with libsystemd for watchdog and status notification support])],
-	[libsystemd=$enableval]
-)
-
-if test "x$libsystemd" != xno; then
-	if test "x$have_linux" != xtrue; then
-		AC_MSG_ERROR([libsystemd is only supported on Linux platforms])
-	fi
-
-	PKG_CHECK_MODULES(LIBSYSTEMD, libsystemd, , AC_MSG_ERROR(Could not find libsystemd dev))
-	AC_DEFINE([USE_LIBSYSTEMD], [1], [Defined to 1 if libsystemd support is wanted])
-else
-	LIBSYSTEMD_LIBS=""
-fi
 
 #check execv signature
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
@@ -627,15 +588,9 @@ echo "Configuration Options Summary:"
 echo
 
 if test "x$libcurl" != xno; then
-	echo "  libcurl(GBT).: Enabled: $LIBCURL_LIBS"
+	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
 else
-	echo "  libcurl(GBT).: Disabled"
-fi
-
-if test "x$libsystemd" != xno; then
-	echo "  libsystemd...........: Enabled: $LIBSYSTEMD_LIBS"
-else
-	echo "  libsystemd...........: Disabled"
+	echo "  libcurl(GBT+getwork).: Disabled"
 fi
 
 echo "  curses.TUI...........: $cursesmsg"
@@ -783,7 +738,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $LIBSYSTEMD_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS $RT_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS $LIBUDEV_LIBS $RT_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
