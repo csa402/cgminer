@@ -387,7 +387,7 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
-	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, pdcurses ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
@@ -415,9 +415,9 @@ else
 fi
 
 if test x$gridseed$zeus$lketc != xnonono; then
-	want_libudev=true
+	//want_libudev=true
 else
-	want_libudev=false
+	//want_libudev=false
 fi
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon2$modminer$gridseed$zeus$lketc != xnonononono])
@@ -431,7 +431,7 @@ if test "x$want_usbutils" != xfalse; then
 	dlibusb="no"
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 	AC_ARG_WITH([system-libusb],
-		[AC_HELP_STRING([--with-system-libusb],[Compile against dynamic system libusb (default use included static libusb)])],
+		[AC_HELP_STRING([--with-system-libusb],[NOT RECOMMENDED! Compile against dynamic system libusb. (Default use included static libusb)])],
 		[dlibusb=$withval]
 	)
 
