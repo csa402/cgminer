@@ -74,6 +74,7 @@ static cgtimer_t usb11_cgt;
 #define HASHFAST_TIMEOUT_MS 999
 #define GRIDSEED_TIMEOUT_MS 999
 #define ZEUS_TIMEOUT_MS 999
+#define LKETC_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
@@ -89,6 +90,7 @@ static cgtimer_t usb11_cgt;
 #define HASHFAST_TIMEOUT_MS 500
 #define GRIDSEED_TIMEOUT_MS 200
 #define ZEUS_TIMEOUT_MS 200
+#define LKETC_TIMEOUT_MS 200
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \
@@ -420,6 +422,27 @@ static struct usb_intinfo zus_ints_ftdi[] = {
 	USB_EPS(0, zus_epinfos_ftdi)
 };
 #endif
+
+#ifdef USE_LKETC
+static struct usb_epinfo lke_epinfos_cp2102[] = {
+        { LIBUSB_TRANSFER_TYPE_BULK,    64,     EPI(1), 0, 0 },
+        { LIBUSB_TRANSFER_TYPE_BULK,    64,     EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo lke_ints_cp2102[] = {
+        USB_EPS(0, lke_epinfos_cp2102)
+};
+
+static struct usb_epinfo lke_epinfos_ftdi[] = {
+        { LIBUSB_TRANSFER_TYPE_BULK,    64,     EPI(1), 0, 0 },
+        { LIBUSB_TRANSFER_TYPE_BULK,    64,     EPO(2), 0, 0 }
+};
+
+static struct usb_intinfo lke_ints_ftdi[] = {
+        USB_EPS(0, lke_epinfos_ftdi)
+};
+#endif
+
 
 #define IDVENDOR_FTDI 0x0403
 
@@ -805,6 +828,21 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ZEUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
 		INTINFO(zus_ints_ftdi) },
+#endif
+#ifdef USE_LKETC
+        {
+                .drv = DRIVER_lketc,
+                .name = "LKE",
+                .ident = IDENT_LKE,
+                .idVendor = 0x10c4,
+                .idProduct = 0xea60,
+                .iProduct = "CP2103 USB to UART Bridge Controller",
+                .config = 1,
+                .timeout = LKETC_TIMEOUT_MS,
+                .latency = LATENCY_STD,
+                INTINFO(lke_ints_cp2102)
+        },
+
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
@@ -2376,12 +2414,15 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		}
 	}
 
-	if (ret == USB_INIT_FAIL)
-		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+	if (ret == USB_INIT_FAIL){
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?), resetting",
 				cgpu->drv->dname,
 				(int)(cgpu->usbinfo.bus_number),
 				(int)(cgpu->usbinfo.device_address));
 
+		if (cgpu->usbdev && cgpu->usbdev->handle)
+  			libusb_reset_device(cgpu->usbdev->handle);
+ 	}
 	return (ret == USB_INIT_OK);
 }
 
@@ -3049,18 +3090,19 @@ void usb_reset(struct cgpu_info *cgpu)
 {
 	int pstate, err = 0;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 	if (!cgpu->usbinfo.nodev) {
 		err = libusb_reset_device(cgpu->usbdev->handle);
 		applog(LOG_WARNING, "%s %i attempted reset got err:(%d) %s",
 			cgpu->drv->name, cgpu->device_id, err, libusb_error_name(err));
 	}
-	if (NODEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	//if (NODEV(err)) {
+	//	cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NODEV(err))
 		release_cgpu(cgpu);
-		DEVWUNLOCK(cgpu, pstate);
-	} else
-		DEVRUNLOCK(cgpu, pstate);
+	//	DEVWUNLOCK(cgpu, pstate);
+	//} else
+	//	DEVRUNLOCK(cgpu, pstate);
 }
 
 int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz,
@@ -3128,6 +3170,9 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, ptr, usbbufread,
 					&got, timeout, MODE_BULK_READ, cmd,
 					first ? SEQ0 : SEQ1, cancellable, false);
+		if (NODEV(err))
+ 			goto out_noerrmsg;
+ 
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -3163,6 +3208,10 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		} else {
 			tried_reset = 0;
 		}
+
+		if (NODEV(err))
+ 			goto out_noerrmsg;
+ 
 		ptr += got;
 		bufleft -= got;
 		if (bufleft < 1)
@@ -3265,6 +3314,9 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		err = usb_perform_transfer(cgpu, usbdev, intinfo, epinfo, (unsigned char *)buf,
 					tosend, &sent, timeout, MODE_BULK_WRITE,
 					cmd, first ? SEQ0 : SEQ1, false, usbdev->tt);
+		if (NODEV(err))
+ 			goto out_noerrmsg;
+ 
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
