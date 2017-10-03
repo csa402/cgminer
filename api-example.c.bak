@@ -23,9 +23,9 @@
 #include <sys/types.h>
 
 #include "compat.h"
-#include "util.h"
+#include "miner.h"
 
-#if defined(unix) || defined(__APPLE__)
+#if defined(unix)
 	#include <errno.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
@@ -187,10 +187,9 @@ void display(char *buf)
 	}
 }
 
-#define SOCKSIZ 65535
-
 int callapi(char *command, char *host, short int port)
 {
+	char buf[RECVSIZE+1];
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;

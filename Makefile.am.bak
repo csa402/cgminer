@@ -9,12 +9,6 @@ else
 USBUTILS_CPPFLAGS =
 endif
 
-if STATIC_CURL
-LIBCURL_CPPFLAGS = -DCURL_STATICLIB
-else
-LIBCURL_CPPFLAGS =
-endif
-
 EXTRA_DIST	= example.conf linux-usb-cgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
